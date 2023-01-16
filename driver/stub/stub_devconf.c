@@ -6,9 +6,9 @@
 #include "stub_usbd.h"
 #include "devconf.h"
 
-PUSB_CONFIGURATION_DESCRIPTOR get_usb_dsc_conf(usbip_stub_dev_t *devstub, UCHAR idx);
-
 #ifdef DBG
+
+#include "strutil.h"
 
 const char *
 dbg_info_intf(PUSBD_INTERFACE_INFORMATION info_intf)
@@ -18,7 +18,7 @@ dbg_info_intf(PUSBD_INTERFACE_INFORMATION info_intf)
 	if (info_intf == NULL)
 		return "<null>";
 
-	dbg_snprintf(buf, 128, "num:%hhu,alt:%hhu", info_intf->InterfaceNumber, info_intf->AlternateSetting);
+	libdrv_snprintf(buf, 128, "num:%hhu,alt:%hhu", info_intf->InterfaceNumber, info_intf->AlternateSetting);
 
 	return buf;
 }
@@ -31,7 +31,7 @@ dbg_info_pipe(PUSBD_PIPE_INFORMATION info_pipe)
 	if (info_pipe == NULL)
 		return "<null>";
 
-	dbg_snprintf(buf, 128, "epaddr:%hhx", info_pipe->EndpointAddress);
+	libdrv_snprintf(buf, 128, "epaddr:%hhx", info_pipe->EndpointAddress);
 
 	return buf;
 }
@@ -54,26 +54,23 @@ dup_info_intf(PUSBD_INTERFACE_INFORMATION info_intf)
 }
 
 static BOOLEAN
-build_infos_intf(devconf_t *devconf, PUSBD_INTERFACE_INFORMATION infos_intf)
+build_infos_intf(devconf_t *devconf, PUSBD_INTERFACE_LIST_ENTRY pintf_list)
 {
-	PUSBD_INTERFACE_INFORMATION	info_intf;
 	unsigned	i;
 
-	info_intf = infos_intf;
 	for (i = 0; i < devconf->bNumInterfaces; i++) {
-		PUSBD_INTERFACE_INFORMATION	info_intf_copied = dup_info_intf(info_intf);
+		PUSBD_INTERFACE_INFORMATION	info_intf_copied = dup_info_intf(pintf_list[i].Interface);
 		if (info_intf_copied == NULL) {
 			DBGE(DBG_GENERAL, "build_infos_intf: out of memory\n");
 			return FALSE;
 		}
 		devconf->infos_intf[i] = info_intf_copied;
-		info_intf = (PUSBD_INTERFACE_INFORMATION)((PUCHAR)info_intf + INFO_INTF_SIZE(info_intf));
 	}
 	return TRUE;
 }
 
 devconf_t *
-create_devconf(PUSB_CONFIGURATION_DESCRIPTOR dsc_conf, USBD_CONFIGURATION_HANDLE hconf, PUSBD_INTERFACE_INFORMATION infos_intf)
+create_devconf(PUSB_CONFIGURATION_DESCRIPTOR dsc_conf, USBD_CONFIGURATION_HANDLE hconf, PUSBD_INTERFACE_LIST_ENTRY pintf_list)
 {
 	devconf_t	*devconf;
 	int	size_devconf;
@@ -98,7 +95,7 @@ create_devconf(PUSB_CONFIGURATION_DESCRIPTOR dsc_conf, USBD_CONFIGURATION_HANDLE
 	devconf->hConf = hconf;
 	RtlZeroMemory(devconf->infos_intf, sizeof(PUSBD_INTERFACE_INFORMATION) * devconf->bNumInterfaces);
 
-	if (!build_infos_intf(devconf, infos_intf)) {
+	if (!build_infos_intf(devconf, pintf_list)) {
 		free_devconf(devconf);
 		return NULL;
 	}

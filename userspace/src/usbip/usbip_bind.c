@@ -38,11 +38,15 @@ walker_bind(HDEVINFO dev_info, PSP_DEVINFO_DATA pdev_info_data, devno_t devno, v
 	devno_t	*pdevno = (devno_t *)ctx;
 
 	if (devno == *pdevno) {
-		/* gotcha */
-		if (attach_stub_driver(devno)) {
-			restart_device(dev_info, pdev_info_data);
-			return -100;
+		int	ret;
+
+		ret = attach_stub_driver(devno);
+		if (ret == 0) {
+			if (!restart_device(dev_info, pdev_info_data))
+				return ERR_DRIVER;
+			return 1;
 		}
+		return ret;
 	}
 	return 0;
 }
@@ -51,17 +55,30 @@ static int
 bind_device(const char *busid)
 {
 	unsigned char	devno;
-	int	ret;
+	int	rc;
 
 	devno = get_devno_from_busid(busid);
-
-	ret = traverse_usbdevs(walker_bind, TRUE, (void *)&devno);
-	if (ret == -100) {
-		info("bind device on busid %s: complete", busid);
-		return 0;
+	if (devno == 0) {
+		err("invalid bus id: %s", busid);
+		return 1;
 	}
-	err("failed to bind device");
-	return 1;
+	rc = traverse_usbdevs(walker_bind, TRUE, (void *)&devno);
+	if (rc != 1) {
+		switch (rc) {
+		case 0:
+		case ERR_NOTEXIST:
+			err("no such device on busid %s", busid);
+			return 2;
+		case ERR_CERTIFICATE:
+			err("\"USBIP Test\" certficiate not installed or properly located in certificate store");
+			return 2;
+		default:
+			err("failed to bind device on busid %s", busid);
+			return 3;
+		}
+	}
+	info("bind device on busid %s: complete", busid);
+	return 0;
 }
 
 int usbip_bind(int argc, char *argv[])
@@ -72,7 +89,6 @@ int usbip_bind(int argc, char *argv[])
 	};
 
 	int opt;
-	int ret = -1;
 
 	for (;;) {
 		opt = getopt_long(argc, argv, "b:", opts, NULL);
@@ -82,15 +98,13 @@ int usbip_bind(int argc, char *argv[])
 
 		switch (opt) {
 		case 'b':
-			ret = bind_device(optarg);
-			goto out;
+			return bind_device(optarg);
 		default:
-			goto err_out;
+			break;
 		}
 	}
 
-err_out:
+	err("empty busid");
 	usbip_bind_usage();
-out:
-	return ret;
+	return 1;
 }

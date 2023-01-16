@@ -16,6 +16,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <guiddef.h>
+
 #include "usbip_common.h"
 #include "usbip_network.h"
 
@@ -39,7 +41,7 @@ create_usbdev_list(void)
 
 	usbdev_list = (usbdev_list_t *)malloc(sizeof(usbdev_list_t));
 	if (usbdev_list == NULL) {
-		err("create_usbdev_list: out of memory");
+		dbg("create_usbdev_list: out of memory");
 		return NULL;
 	}
 	usbdev_list->n_usbdevs = 0;
@@ -55,16 +57,16 @@ add_usbdev(usbdev_list_t *usbdev_list, const char *id_hw, devno_t devno)
 	usbdev_t	*usbdevs, *usbdev;
 
 	if (usbdev_list->n_usbdevs == 255) {
-		err("add_usbdev: exceed maximum usb devices");
+		dbg("exceed maximum usb devices");
 		return;
 	}
 	if (!get_usbdev_info(id_hw, &vendor, &product)) {
-		err("add_usbdev: invalid hw id: %s", id_hw);
+		dbg("drop hub or multifunction interface: %s", id_hw);
 		return;
 	}
 	usbdevs = (usbdev_t *)realloc(usbdev_list->usbdevs, sizeof(usbdev_t) * (usbdev_list->n_usbdevs + 1));
 	if (usbdevs == NULL) {
-		err("add_usbdev: out of memory");
+		dbg("out of memory");
 		return;
 	}
 	usbdev_list->n_usbdevs++;
@@ -113,11 +115,12 @@ walker_list(HDEVINFO dev_info, PSP_DEVINFO_DATA pdev_info_data, devno_t devno, v
 
 	id_hw = get_id_hw(dev_info, pdev_info_data);
 	if (id_hw == NULL) {
-		err("failed to get hw id\n");
+		dbg("failed to get hw id\n");
 		return 0;
 	}
 
 	add_usbdev(usbdev_list, id_hw, devno);
+
 	free(id_hw);
 	return 0;
 }
@@ -152,8 +155,10 @@ int list_devices(BOOL parsable)
 	int	i;
 
 	usbdev_list = usbip_list_usbdevs();
-	if (usbdev_list == NULL)
+	if (usbdev_list == NULL) {
+		err("out of memory");
 		return 2;
+	}
 
 	for (i = 0; i < usbdev_list->n_usbdevs; i++) {
 		list_device(usbdev_list->usbdevs + i, parsable);

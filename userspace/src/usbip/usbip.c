@@ -19,13 +19,13 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <stdlib.h>
+
 #include "usbip_windows.h"
 
 #include "usbip_common.h"
 #include "usbip_network.h"
 #include "usbip.h"
-
-#include <stdlib.h>
 
 static int usbip_help(int argc, char *argv[]);
 static int usbip_version(int argc, char *argv[]);
@@ -50,46 +50,64 @@ struct command {
 
 static const struct command cmds[] = {
 	{
-		"help",
-		usbip_help,
-		NULL,
-		NULL
+		.name  = "help",
+		.fn    = usbip_help,
+		.help  = NULL,
+		.usage = NULL
 	},
 	{
-		"version",
-		usbip_version,
-		NULL,
-		NULL
+		.name  = "version",
+		.fn    = usbip_version,
+		.help  = NULL,
+		.usage = NULL
 	},
 	{
-		"attach",
-		usbip_attach,
-		"Attach a remote USB device",
-		usbip_attach_usage
+		.name  = "attach",
+		.fn    = usbip_attach,
+		.help  = "Attach a remote USB device(WDM or ude)",
+		.usage = usbip_attach_usage
 	},
 	{
-		"detach",
-		usbip_detach,
-		"Detach a remote USB device",
-		usbip_detach_usage
+		.name  = "detach",
+		.fn    = usbip_detach,
+		.help  = "Detach a remote USB device",
+		.usage = usbip_detach_usage
 	},
 	{
-		"list",
-		usbip_list,
-		"List exportable or local USB devices",
-		usbip_list_usage
+		.name  = "list",
+		.fn    = usbip_list,
+		.help  = "List exportable or local USB devices",
+		.usage = usbip_list_usage
 	},
 	{
-		"bind",
-		usbip_bind,
-		"Bind device to usbip stub",
-		usbip_bind_usage
+		.name  = "bind",
+		.fn    = usbip_bind,
+		.help  = "Bind device to usbip stub driver",
+		.usage = usbip_bind_usage
 	},
 	{
-		"unbind",
-		usbip_unbind,
-		"Unbind device from usbip stub",
-		usbip_unbind_usage
+		.name  = "unbind",
+		.fn    = usbip_unbind,
+		.help  = "Unbind device from usbip stub driver",
+		.usage = usbip_unbind_usage
+	},
+	{
+		.name  = "install",
+		.fn    = usbip_install,
+		.help  = "Install usbip vhci driver",
+		.usage = usbip_install_usage
+	},
+	{
+		.name = "uninstall",
+		.fn = usbip_uninstall,
+		.help = "Uninstall usbip vhci driver",
+		.usage = usbip_uninstall_usage
+	},
+	{
+		.name  = "port",
+		.fn    = usbip_port_show,
+		.help  = "Show imported USB devices",
+		.usage = usbip_port_usage
 	},
 	{ NULL, NULL, NULL, NULL }
 };
@@ -97,16 +115,20 @@ static const struct command cmds[] = {
 static int usbip_help(int argc, char *argv[])
 {
 	const struct command *cmd;
-	int i;
-	int ret = 0;
 
-	if (argc > 1 && argv++) {
+	if (argc > 1) {
+		int	i;
+
 		for (i = 0; cmds[i].name != NULL; i++)
-			if (!strcmp(cmds[i].name, argv[0]) && cmds[i].usage) {
-				cmds[i].usage();
-				goto done;
+			if (strcmp(cmds[i].name, argv[1]) == 0) {
+				if (cmds[i].usage)
+					cmds[i].usage();
+				else
+					printf("no help for command: %s\n", argv[1]);
+				return 0;
 			}
-		ret = -1;
+		err("no help for invalid command: %s", argv[1]);
+		return 1;
 	}
 
 	usbip_usage();
@@ -115,41 +137,36 @@ static int usbip_help(int argc, char *argv[])
 		if (cmd->help != NULL)
 			printf("  %-10s %s\n", cmd->name, cmd->help);
 	printf("\n");
-done:
-	return ret;
+	return 0;
 }
 
 static int usbip_version(int argc, char *argv[])
 {
-	(void) argc;
-	(void) argv;
-
-	printf(PROGNAME " (%s)\n", usbip_version_string);
+	printf("usbip (%s)\n", usbip_version_string);
 	return 0;
 }
 
 static int run_command(const struct command *cmd, int argc, char *argv[])
 {
-	dbg("running command: `%s'\n", cmd->name);
+	dbg("running command: %s", cmd->name);
 	return cmd->fn(argc, argv);
 }
 
 int main(int argc, char *argv[])
 {
 	static const struct option opts[] = {
-		{ "debug", no_argument, NULL, 'd' },
+		{ "debug",    no_argument,       NULL, 'd' },
 		{ "tcp-port", required_argument, NULL, 't' },
-		{ NULL, 0, NULL, 0 }
+		{ NULL,       0,                 NULL,  0 }
 	};
 
-	char *cmd;
-	int opt;
-	int i, rc = -1;
+	char	*cmd;
+	int	opt;
+	int	rc = 1;
 
-	if (init_socket())
-		return EXIT_FAILURE;
-
+	usbip_progname = "usbip";
 	usbip_use_stderr = 1;
+
 	opterr = 0;
 	for (;;) {
 		opt = getopt_long(argc, argv, "+dt:", opts, NULL);
@@ -165,17 +182,23 @@ int main(int argc, char *argv[])
 			usbip_setup_port_number(optarg);
 			break;
 		case '?':
-			printf("usbip: invalid option\n");
-			/* Terminate after printing error */
-			/* FALLTHRU */
+			err("invalid option: %c", opt);
+			/* fall through */
 		default:
 			usbip_usage();
-			goto out;
+			return 1;
 		}
+	}
+
+	if (init_socket() < 0) {
+		err("cannot setup windows socket");
+		return EXIT_FAILURE;
 	}
 
 	cmd = argv[optind];
 	if (cmd) {
+		int	i;
+
 		for (i = 0; cmds[i].name != NULL; i++)
 			if (!strcmp(cmds[i].name, cmd)) {
 				argc -= optind;
@@ -184,11 +207,14 @@ int main(int argc, char *argv[])
 				rc = run_command(&cmds[i], argc, argv);
 				goto out;
 			}
+		err("invalid command: %s", cmd);
+	}
+	else {
+		/* empty command */
+		usbip_help(0, NULL);
 	}
 
-	/* invalid command */
-	usbip_help(0, NULL);
 out:
 	cleanup_socket();
-	return (rc > -1 ? EXIT_SUCCESS : EXIT_FAILURE);
+	return rc;
 }

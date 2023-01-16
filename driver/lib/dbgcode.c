@@ -3,6 +3,7 @@
 #ifdef DBG
 
 #include <ntstrsafe.h>
+#include "strutil.h"
 
 static namecode_t namecodes_ntstatus[] = {
 	K_V(STATUS_SUCCESS)
@@ -133,78 +134,133 @@ static namecode_t	namecodes_device_power[] = {
 	{0,0}
 };
 
+static namecode_t	namecodes_usb_descriptor_type[] = {
+	K_V(USB_DEVICE_DESCRIPTOR_TYPE)
+	K_V(USB_CONFIGURATION_DESCRIPTOR_TYPE)
+	K_V(USB_STRING_DESCRIPTOR_TYPE)
+	K_V(USB_INTERFACE_DESCRIPTOR_TYPE)
+	K_V(USB_ENDPOINT_DESCRIPTOR_TYPE)
+	{0,0}
+};
+
+#define NAMECODE_BUF_MAX	256
+
+const char *
+dbg_namecode_buf(namecode_t *namecodes, const char *codetype, unsigned int code, char *buf, int buf_max)
+{
+	ULONG	nwritten = 0;
+	ULONG	n_codes = 0;
+	int i;
+
+	/* assume: duplicated codes may exist */
+	for (i = 0; namecodes[i].name; i++) {
+		if (code == namecodes[i].code) {
+			if (nwritten > 0)
+				nwritten += libdrv_snprintf(buf + nwritten, buf_max - nwritten, ",%s", namecodes[i].name);
+			else
+				nwritten = libdrv_snprintf(buf, buf_max, "%s", namecodes[i].name);
+			n_codes++;
+		}
+	}
+	if (n_codes == 0)
+		libdrv_snprintf(buf, buf_max, "Unknown %s code: %x", codetype, code);
+	return buf;
+}
+
 const char *
 dbg_namecode(namecode_t *namecodes, const char *codetype, unsigned int code)
 {
-	static char	buf[128];
-	int i;
+	static char	buf[NAMECODE_BUF_MAX];
 
-	for (i = 0; namecodes[i].name; i++) {
-		if (code == namecodes[i].code)
-			return namecodes[i].name;
-	}
-	RtlStringCchPrintfA(buf, 128, "Unknown %s code: %x", codetype, code);
-	return buf;
+	return dbg_namecode_buf(namecodes, codetype, code, buf, NAMECODE_BUF_MAX);
 }
 
 const char *
 dbg_ntstatus(NTSTATUS status)
 {
-	return dbg_namecode(namecodes_ntstatus, "ntstatus", status);
+	static char	buf[NAMECODE_BUF_MAX];
+
+	return dbg_namecode_buf(namecodes_ntstatus, "ntstatus", status, buf, NAMECODE_BUF_MAX);
 }
 
 const char *
 dbg_usbd_status(USBD_STATUS status)
 {
-	return dbg_namecode(namecodes_usbd_status, "usbd status", status);
+	static char	buf[NAMECODE_BUF_MAX];
+
+	return dbg_namecode_buf(namecodes_usbd_status, "usbd status", status, buf, NAMECODE_BUF_MAX);
 }
 
 const char *
 dbg_dispatch_major(UCHAR major)
 {
-	return dbg_namecode(namecodes_dispatch_major, "dispatch major", (unsigned int)major);
+	static char	buf[NAMECODE_BUF_MAX];
+
+	return dbg_namecode_buf(namecodes_dispatch_major, "dispatch major", (unsigned int)major, buf, NAMECODE_BUF_MAX);
 }
 
 const char *
 dbg_pnp_minor(UCHAR minor)
 {
-	return dbg_namecode(namecodes_pnp_minor, "pnp minor function", minor);
+	static char	buf[NAMECODE_BUF_MAX];
+
+	return dbg_namecode_buf(namecodes_pnp_minor, "pnp minor function", minor, buf, NAMECODE_BUF_MAX);
 }
 
 const char *
 dbg_bus_query_id_type(BUS_QUERY_ID_TYPE type)
 {
-	return dbg_namecode(namecodes_bus_query_id, "bus query id", type);
+	static char	buf[NAMECODE_BUF_MAX];
+
+	return dbg_namecode_buf(namecodes_bus_query_id, "bus query id", type, buf, NAMECODE_BUF_MAX);
 }
 
 const char *
 dbg_dev_relation(DEVICE_RELATION_TYPE type)
 {
-	return dbg_namecode(namecodes_dev_relation, "device relation", type);
+	static char	buf[NAMECODE_BUF_MAX];
+
+	return dbg_namecode_buf(namecodes_dev_relation, "device relation", type, buf, NAMECODE_BUF_MAX);
 }
 
 const char *
 dbg_wmi_minor(UCHAR minor)
 {
-	return dbg_namecode(namecodes_wmi_minor, "wmi minor function", minor);
+	static char	buf[NAMECODE_BUF_MAX];
+
+	return dbg_namecode_buf(namecodes_wmi_minor, "wmi minor function", minor, buf, NAMECODE_BUF_MAX);
 }
 
 const char *
 dbg_power_minor(UCHAR minor)
 {
-	return dbg_namecode(namecodes_power_minor, "power minor function", minor);
+	static char	buf[NAMECODE_BUF_MAX];
+
+	return dbg_namecode_buf(namecodes_power_minor, "power minor function", minor, buf, NAMECODE_BUF_MAX);
 }
 
 const char *
 dbg_system_power(SYSTEM_POWER_STATE state)
 {
-	return dbg_namecode(namecodes_system_power, "system power", (int)state);
+	static char	buf[NAMECODE_BUF_MAX];
+
+	return dbg_namecode_buf(namecodes_system_power, "system power", (int)state, buf, NAMECODE_BUF_MAX);
 }
 
 const char *
 dbg_device_power(DEVICE_POWER_STATE state)
 {
-	return dbg_namecode(namecodes_device_power, "device power", (int)state);
+	static char	buf[NAMECODE_BUF_MAX];
+
+	return dbg_namecode_buf(namecodes_device_power, "device power", (int)state, buf, NAMECODE_BUF_MAX);
+}
+
+const char *
+dbg_usb_descriptor_type(UCHAR dsc_type)
+{
+	static char	buf[NAMECODE_BUF_MAX];
+
+	return dbg_namecode_buf(namecodes_usb_descriptor_type, "descriptor type", dsc_type, buf, NAMECODE_BUF_MAX);
 }
 
 #endif
